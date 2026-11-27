@@ -2,6 +2,12 @@
 
 OpsPilot is a portfolio-grade incident investigation system that collects telemetry evidence, runs an **IsolationForest** anomaly detector, retrieves operational runbooks, ranks root-cause hypotheses, traces the investigation, and keeps remediation behind explicit human approval.
 
+## Demo
+
+[![OpsPilot demo video](docs/demo/opspilot-cover.png)](https://github.com/kalpshah2600/opspilot/raw/main/docs/demo/opspilot-demo.mp4)
+
+[Watch or download the 58-second demo (MP4, 1080p)](https://github.com/kalpshah2600/opspilot/raw/main/docs/demo/opspilot-demo.mp4): injecting a database pool exhaustion and a Kafka consumer lag incident, reviewing ranked hypotheses and evidence, and approving the proposed remediation.
+
 It has two reasoning modes:
 
 - `rules` (default): deterministic, free, reproducible baseline.
