@@ -1,12 +1,15 @@
-"""Minimal MCP-style tool catalog.
-This project keeps the transport dependency optional; these JSON-schema contracts are the
-same boundary used by the agent and can be exposed through an MCP SDK when configured.
-"""
-TOOLS=[
- {"name":"get_metrics","description":"Read current service metrics","inputSchema":{"type":"object","properties":{}}},
- {"name":"search_logs","description":"Search recent service logs","inputSchema":{"type":"object","properties":{"query":{"type":"string"}}}},
- {"name":"get_deployments","description":"Read recent deployment history","inputSchema":{"type":"object","properties":{}}},
- {"name":"search_runbooks","description":"Retrieve operational knowledge","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}},
-]
+from .store import STATE
+from .retrieval import retrieve
 
-def catalog(): return {"protocol":"MCP-compatible contracts","tools":TOOLS}
+def get_metrics(): return STATE["metrics"]
+def search_logs(query=""):
+    q=query.lower().strip();return [x for x in STATE["logs"] if not q or q in x["message"].lower() or q in x["service"].lower()]
+def get_deployments(): return STATE["deployments"][-10:]
+def search_runbooks(query): return retrieve(query,3)
+def catalog(): return {"protocol":"MCP server available over stdio via python -m app.mcp_server","tools":["get_metrics","search_logs","get_deployments","search_runbooks"]}
+def serve():
+    from mcp.server.fastmcp import FastMCP
+    mcp=FastMCP("OpsPilot")
+    mcp.tool()(get_metrics);mcp.tool()(search_logs);mcp.tool()(get_deployments);mcp.tool()(search_runbooks)
+    mcp.run(transport="stdio")
+if __name__=="__main__": serve()

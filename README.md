@@ -1,119 +1,111 @@
-# OpsPilot — AI Production Incident Engineer
+# OpsPilot V3 — Evidence-grounded incident investigation
 
-OpsPilot is a portfolio-grade incident investigation system. It combines deterministic observability tools, retrieval, anomaly detection, and an optional LLM reasoning layer to investigate failures in a small distributed commerce application.
+OpsPilot is a portfolio-grade incident investigation system that collects telemetry evidence, runs an **IsolationForest** anomaly detector, retrieves operational runbooks, ranks root-cause hypotheses, traces the investigation, and keeps remediation behind explicit human approval.
 
-## What it demonstrates
-- FastAPI APIs and tool-oriented agent architecture
-- React + TypeScript incident investigation UI
-- PostgreSQL/Redis-ready architecture with local zero-dependency fallback
-- Metrics/log/deployment/runbook retrieval with evidence citations
-- ML anomaly detection (Isolation Forest when scikit-learn is available; robust z-score fallback)
-- Reproducible incident benchmark and evaluation metrics
-- Human approval boundary for remediation actions
-- Docker, CI, tests, structured logging, health checks
+It has two reasoning modes:
 
-## Demo scenario
-Run the stack, inject a `db_pool_exhaustion` incident, then ask OpsPilot to investigate. It correlates elevated latency/error rate, DB saturation, a recent deployment, logs, and a runbook before returning a ranked root cause and remediation proposal.
+- `rules` (default): deterministic, free, reproducible baseline.
+- `openai`: a **real optional OpenAI structured-output adapter** that receives metrics, anomaly output, logs, deployments, retrieved evidence and baseline hypotheses, then returns a constrained diagnosis. If the provider fails, OpsPilot logs the failure and falls back to the deterministic baseline.
 
-## Quick start (local)
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-In another terminal:
-```bash
-curl -X POST http://localhost:8000/demo/reset
-curl -X POST http://localhost:8000/demo/incidents/db_pool_exhaustion
-curl -X POST http://localhost:8000/investigate -H 'Content-Type: application/json' -d '{"question":"Why did checkout failures increase?"}'
-```
-Open API docs at `http://localhost:8000/docs`.
+The project intentionally does **not** claim that an LLM is required for incident response. The point is to compare a transparent baseline with an LLM-assisted reasoning path on the same evidence.
 
-## Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-The UI expects the API at `http://localhost:8000` by default.
+## What is actually implemented
 
-## Docker
+- FastAPI API and React + TypeScript UI
+- Evidence collection from metrics, logs and deployment history
+- scikit-learn `IsolationForest` invoked on every investigation
+- lexical runbook retrieval with evidence grounding
+- deterministic hypothesis baseline with an `unknown` abstention path
+- optional OpenAI structured-output hypothesis ranker
+- a real MCP server over stdio (`python -m app.mcp_server`) exposing metrics, log search, deployments and runbook search
+- PostgreSQL persistence for investigations/approvals when `DATABASE_URL` is configured
+- Redis incident/approval cache when `REDIS_URL` is configured
+- structured JSON application logs
+- human approval records; the portfolio environment intentionally executes **no production mutation**
+- Docker Compose for API, UI, PostgreSQL and Redis
+- GitHub Actions for backend tests/benchmark and frontend production build
+
+## Run locally
+
+### Docker Compose
 ```bash
 docker compose up --build
 ```
-Then visit `http://localhost:5173`.
+Open `http://localhost:5173`.
 
-## Optional LLM
-The default investigator is deterministic so the repository works without paid APIs. Set `OPENAI_API_KEY` and `OPSPILOT_LLM=1` to enable the optional OpenAI-compatible reasoning adapter. Tool evidence remains the source of truth.
-
-## Architecture
-```mermaid
-flowchart TD
-  U[React UI] --> A[FastAPI Gateway]
-  A --> P[Incident Investigator]
-  P --> M[Metrics Tool]
-  P --> L[Logs Tool]
-  P --> D[Deployments Tool]
-  P --> R[Runbook Retrieval]
-  P --> Q[SQL/DB Health Tool]
-  M --> E[Evidence Aggregator]
-  L --> E
-  D --> E
-  R --> E
-  Q --> E
-  E --> V[Verifier + Root Cause Ranker]
-  V --> H[Human Approval Boundary]
+### Python only
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=. uvicorn app.main:app --reload
 ```
+
+### Frontend
+```bash
+cd frontend
+npm ci
+npm run dev
+# production verification
+npm run build
+```
+
+## LLM reasoning (optional)
+The default works without any API key.
+
+```bash
+export OPSPILOT_REASONER=openai
+export OPENAI_API_KEY=...
+export OPSPILOT_LLM_MODEL=gpt-4o-mini
+PYTHONPATH=. uvicorn app.main:app --reload
+```
+
+`app/reasoners.py` contains the provider call and strict JSON schema. The API response reports which reasoner actually produced the diagnosis.
+
+## MCP
+Run the MCP server over stdio:
+```bash
+PYTHONPATH=. python -m app.mcp_server
+```
+Tools: `get_metrics`, `search_logs`, `get_deployments`, `search_runbooks`.
 
 ## Evaluation
-The benchmark in `evaluation/incidents.json` contains labeled incidents. Run:
 ```bash
-python evaluation/run_benchmark.py
+PYTHONPATH=. python evaluation/run_benchmark_v3.py
 ```
-It reports root-cause accuracy, evidence coverage, mean investigation latency, and unsafe-action rate. Do not put benchmark numbers on your resume until you have actually run and recorded them.
+The benchmark has 60 noisy **known synthetic incidents** across the three implemented demo families plus unseen anomalous cases. Known-case accuracy is reported separately from **unseen abstention**. This is a controlled synthetic benchmark, not production accuracy.
 
-## Repository map
-- `app/` API, investigator, tools, retrieval, demo telemetry
-- `ml/` anomaly detector
-- `evaluation/` labeled benchmark + runner
-- `frontend/` React/TypeScript UI
-- `tests/` API and investigator tests
-- `.github/workflows/` CI
-- `docs/` architecture and interview talking points
+This design avoids a misleading claim that 60/60 on three hand-authored failure families demonstrates general incident intelligence.
 
-## Safety design
-OpsPilot never executes remediation from the investigation endpoint. It proposes an action and requires an explicit approval call. The included approval endpoint is a demo boundary and records the action; production integrations should add authentication, RBAC, audit logs, policy checks, and deployment-provider controls.
-
-## Portfolio positioning
-This project is intentionally built around measurable engineering behavior rather than a generic chatbot: tool use, evidence grounding, evaluation, observability, failure injection, and human-in-the-loop remediation.
-
-
-## V2: evidence-first agent
-
-V2 removes the ground-truth shortcut from the investigator. The diagnostic layer sees only observable metrics, logs and deployment history. It ranks competing hypotheses, retrieves relevant runbooks, returns an evidence trail, and places remediation behind explicit human approval.
-
-Additional V2 endpoints:
-
-- `GET /tools` — MCP-compatible tool contracts
-- `GET /observability` — agent span call/latency summaries
-- `POST /approve` — records human approval; performs **no production mutation**
-
-### Reproducible V2 benchmark
-
-```bash
-python evaluation/generate_dataset.py
-python evaluation/run_benchmark_v2.py
-```
-
-Current checked result on the included deterministic synthetic suite: **60/60 root-cause classifications**, **100% runbook grounding**, **0 autonomous remediation actions**. These are synthetic test results across three included failure families, not a claim of real-world production accuracy.
-
-### Verification
-
+## Tests
 ```bash
 PYTHONPATH=. pytest -q
 ```
 
-Current repository status: **7 tests passing**.
+## Architecture
+```text
+React/TypeScript -> FastAPI -> evidence collector
+                              |-> IsolationForest
+                              |-> logs / metrics / deployments
+                              |-> runbook retrieval
+                              |-> rules baseline
+                              `-> optional OpenAI structured reasoner
+                                      |
+                               diagnosis + alternatives
+                                      |
+                               human approval boundary
+                                      |
+                              PostgreSQL + Redis
 
-See `docs/V2_DESIGN.md` for design and evaluation limitations.
+MCP stdio server -> metrics / logs / deployments / runbooks
+```
+
+## Honest limitations
+- The included telemetry is synthetic; this is not connected to a real production environment.
+- Runbook retrieval is lexical, not vector/embedding retrieval.
+- The deterministic baseline explicitly knows three demo incident families.
+- The OpenAI path requires the user's API key and is not exercised by CI.
+- PostgreSQL/Redis are optional infrastructure paths; Python-only development can run without them.
+- Approval is recorded, but remediation is deliberately not executed.
+
+These constraints are intentional and documented so the repository can be evaluated on what the code actually does.
