@@ -21,6 +21,7 @@ export interface Hypothesis {
   label: string;
   confidence: number;
   rationale: string[];
+  qualified: boolean;
 }
 
 export interface Investigation {
@@ -35,6 +36,8 @@ export interface Investigation {
   requires_approval: boolean;
   status: string;
   reasoner: string;
+  unexplained_signals: string[];
+  rationale: string[];
 }
 
 export interface Approval {

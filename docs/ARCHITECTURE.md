@@ -6,8 +6,13 @@ OpsPilot investigates incidents in a small synthetic commerce system. It collect
 
 1. **Collect evidence.** `app/agent.py` reads current metrics, recent logs and the last three deployments from the telemetry store. The diagnostic code never reads the injected scenario label.
 2. **Score anomalies.** `ml/anomaly_detector.py` runs a scikit-learn `IsolationForest`, trained on a healthy baseline, over the current metrics on every investigation. It also reports each metric's ratio to the baseline median. The result is added to the evidence trail.
-3. **Rank hypotheses.** `app/reasoners.py` scores each supported failure family (database pool exhaustion, Kafka consumer lag, memory exhaustion) from metric thresholds and log and deployment signals, and records the reasons for each score.
-4. **Abstain when unsure.** If no hypothesis has enough support but the anomaly detector still flags the telemetry, the result is `unknown` and the recommended action is escalation to a human. If nothing is anomalous, the result is `healthy`.
+3. **Rank hypotheses.** `app/reasoners.py` scores each supported failure family (database pool exhaustion, Kafka consumer lag, memory exhaustion). Each family has a required anchor signal (for example Postgres connections at 90% or more) and a list of cause-specific corroborators (for example a pool-acquisition timeout in the logs or a pool-size change in a deploy). A family only *qualifies* when its anchor and at least one corroborator are both present. A shared keyword or a single symptom is not enough.
+4. **Decide or abstain.**
+   - No qualified family and anomalous telemetry: `unknown`, escalate to a human.
+   - Two qualified families with similar scores: `unknown` ("multiple plausible causes"), because there is no single safe action.
+   - One clear winner: diagnose it, then list any anomalous signals it cannot explain (for example high Kafka lag during a DB pool incident) and lower confidence by 0.15 for each.
+   - No anomaly and no qualified family: `healthy`.
+   - **Verify.** Whichever reasoner chose the diagnosis, `verify` checks it against the same rules and replaces an unsupported choice with `unknown`.
 5. **Ground in runbooks.** `app/retrieval.py` retrieves the most relevant runbooks with lexical cosine similarity and attaches them to the evidence.
 6. **Propose, then wait.** The API returns the root cause, confidence, ranked hypotheses, evidence trail and a recommended action. `POST /approve` records an approval but executes nothing.
 7. **Trace.** Each stage is timed by `app/observability.py` and exposed at `GET /observability`.
@@ -38,14 +43,23 @@ Investigation and remediation are separate operations. A diagnosis can recommend
 
 ## Evaluation
 
-`evaluation/run_benchmark_v3.py` runs 60 synthetic cases across the three supported failure families, with irrelevant noise added to metrics and logs, and reports root-cause accuracy and runbook grounding. It also runs three unseen anomalous cases (CPU saturation, dependency timeout, disk pressure) and checks that the system abstains instead of forcing a known diagnosis.
+`evaluation/benchmark.py` runs 133 deterministic synthetic cases from `evaluation/cases.py` against both the current rules and the V3 rules (`evaluation/legacy_rules.py`):
 
-These numbers measure behaviour on hand-built synthetic data. They are not a claim of production accuracy.
+- **known**: the three supported families with randomized severity, partial evidence and noise
+- **near_miss**: failures that share a symptom or keyword with a known family but have a different cause (thread-pool exhaustion, lock contention, slow downstream consumer, producer backfill, cache warm-up)
+- **unseen**: six failure types the system does not model
+- **compound**: two supported failures at once
+- **unexplained**: a supported failure plus an anomaly it cannot explain
+- **healthy**: normal telemetry with noise
+- **edge**: cases chosen to show where the current rules fail; reported but not thresholded
+
+The README has the current results table. These numbers measure behaviour on hand-built synthetic data written by the same author as the rules. They are not a claim of production accuracy.
 
 ## Known limitations
 
 - Telemetry is synthetic; there is no connection to real Prometheus, log or deployment systems.
-- The rules baseline only knows three failure families.
+- The rules baseline only knows three failure families, and fixed thresholds miss incidents just below them.
+- Lock contention that also exhausts the connection pool is still diagnosed as pool exhaustion.
 - Runbook retrieval is lexical, not embedding-based.
 - The OpenAI path is not exercised in CI because it needs an API key.
 

@@ -5,7 +5,7 @@ from .store import STATE
 from .models import Evidence, InvestigationResult, Hypothesis
 from .retrieval import retrieve
 from .observability import traced
-from .reasoners import rule_rank, llm_rank
+from .reasoners import rule_rank, llm_rank, verify, UNEXPLAINED_PENALTY
 from ml.anomaly_detector import DETECTOR
 log=logging.getLogger("opspilot.agent")
 
@@ -30,15 +30,24 @@ def ground(label,evidence):
 @traced("investigation")
 def investigate(question):
     evidence,anomaly=collect_evidence(); top,ranked=rule_rank(STATE["metrics"],evidence,anomaly); reasoner="rules"
-    hyps=[Hypothesis(key=c.key,label=c.label,confidence=min(.99,max(0,c.score/10)),rationale=c.rationale) for c in ranked]
+    hyps=[Hypothesis(key=c.key,label=c.label,confidence=min(.99,max(0,c.score/10)),rationale=c.rationale,qualified=c.qualified) for c in ranked]
     if os.getenv("OPSPILOT_REASONER","rules").lower()=="openai" and os.getenv("OPENAI_API_KEY"):
         try: top,hyps=llm_rank(STATE["metrics"],evidence,anomaly,ranked); reasoner="openai"
         except Exception as exc: log.exception("llm_reasoner_failed_falling_back",extra={"error":str(exc)})
+    override=verify_step(top.key,ranked,anomaly)
+    if override: top=override
     grounded=ground(top.label,evidence)
-    if reasoner=="rules":
-        second=ranked[1].score if len(ranked)>1 else 0; margin=top.score-second
-        confidence=.86 if top.key=="healthy" else (.45 if top.key=="unknown" else min(.98,.55+.05*top.score+.02*max(margin,0)))
+    unexplained=list(top.unexplained)
+    if top.key=="healthy": confidence=.86
+    elif top.key=="unknown": confidence=.45
+    elif reasoner=="rules": confidence=min(.95,.55+.04*top.score)
     else: confidence=min(.99,max(.01,top.score/10))
-    result=InvestigationResult(incident_id=f"inc-{uuid4().hex[:8]}",question=question,root_cause=top.label,root_cause_key=top.key,confidence=round(confidence,2),evidence=evidence+grounded,hypotheses=hyps,recommended_action=top.action,requires_approval=top.key not in {"healthy","unknown"},status="proposed" if top.key not in {"healthy","unknown"} else "resolved",reasoner=reasoner)
-    log.info("investigation_complete",extra={"incident_id":result.incident_id,"root_cause_key":result.root_cause_key,"confidence":result.confidence,"reasoner":reasoner})
+    if unexplained: confidence=max(.3,confidence-UNEXPLAINED_PENALTY*len(unexplained))
+    actionable=top.key not in {"healthy","unknown"}
+    result=InvestigationResult(incident_id=f"inc-{uuid4().hex[:8]}",question=question,root_cause=top.label,root_cause_key=top.key,confidence=round(confidence,2),evidence=evidence+grounded,hypotheses=hyps,recommended_action=top.action,requires_approval=actionable,status="proposed" if actionable else ("escalated" if top.key=="unknown" else "resolved"),reasoner=reasoner,unexplained_signals=unexplained,rationale=list(top.rationale))
+    log.info("investigation_complete",extra={"incident_id":result.incident_id,"root_cause_key":result.root_cause_key,"confidence":result.confidence,"reasoner":reasoner,"unexplained":unexplained})
     return result
+
+@traced("verify")
+def verify_step(key,ranked,anomaly):
+    return verify(key,ranked,anomaly)

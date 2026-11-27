@@ -9,7 +9,7 @@ jobs:
         with: {python-version: '3.12'}
       - run: pip install -r requirements.txt
       - run: PYTHONPATH=. pytest -q
-      - run: PYTHONPATH=. python evaluation/run_benchmark_v3.py
+      - run: PYTHONPATH=. python evaluation/benchmark.py --check
   frontend:
     runs-on: ubuntu-latest
     defaults: {run: {working-directory: frontend}}

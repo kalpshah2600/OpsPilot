@@ -191,6 +191,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pill { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
 .pill-warn { color: var(--warn); background: var(--warn-soft); }
 .pill-ok { color: var(--accent); background: var(--accent-soft); }
+.pill-muted { color: var(--muted); background: var(--surface-2); font-weight: 500; }
+.unexplained { border: 1px solid rgba(228, 181, 82, 0.4); background: var(--warn-soft); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+.why { margin-bottom: 12px; }
+.why ul { display: flex; flex-direction: column; gap: 3px; }
+.why li { font-size: 13.5px; color: var(--muted); padding-left: 12px; position: relative; }
+.why li::before { content: ''; position: absolute; left: 0; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: var(--warn); }
+.unexplained .label { color: var(--warn); }
+.unexplained p { font-size: 13.5px; }
+.rationale li.missing { color: var(--faint); font-style: italic; }
 .ratios { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
 .ratios li { display: grid; grid-template-columns: 110px 1fr 52px; align-items: center; gap: 12px; font-size: 13px; }
 .ratios li .bar > div { background: var(--faint); }

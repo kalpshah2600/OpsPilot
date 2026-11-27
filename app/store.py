@@ -38,6 +38,11 @@ def inject(scenario: str):
     elif scenario == "memory_leak":
         STATE["metrics"].update({"checkout.p95_ms":1300.0,"checkout.error_rate":0.082,"checkout.memory_pct":97.0})
         STATE["logs"].append({"ts":now(),"service":"checkout","level":"ERROR","message":"container OOMKill observed after memory growth"})
+    elif scenario == "thread_pool_exhaustion":
+        # Near miss for DB pool exhaustion: same symptoms and the word "pool", but Postgres is healthy.
+        STATE["metrics"].update({"checkout.p95_ms":2050.0,"checkout.error_rate":0.097})
+        STATE["logs"].append({"ts":now(),"service":"checkout","level":"ERROR","message":"worker thread pool exhausted, rejecting requests"})
+        STATE["deployments"].append({"id":"deploy-842","service":"checkout","version":"1.8.4","ts":now(),"changes":"enable synchronous fraud check on payment path"})
     else: raise ValueError("unknown scenario")
     return STATE
 reset()

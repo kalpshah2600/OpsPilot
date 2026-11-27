@@ -27,7 +27,7 @@ def demo_reset():return reset()
 @app.post("/demo/incidents/{scenario}")
 def demo_incident(scenario:str):
     try:return inject(scenario)
-    except ValueError:raise HTTPException(404,"Supported: db_pool_exhaustion, kafka_lag, memory_leak")
+    except ValueError:raise HTTPException(404,"Supported: db_pool_exhaustion, kafka_lag, memory_leak, thread_pool_exhaustion")
 @app.post("/approve")
 def approve(req:ApprovalRequest):
     record={"incident_id":req.incident_id,"action":req.action,"approved_by":req.approved_by,"ts":now(),"executed":False,"note":"Approval recorded. This portfolio environment intentionally executes no production mutation."}; STATE["approvals"].append(record);save_approval(record);return record

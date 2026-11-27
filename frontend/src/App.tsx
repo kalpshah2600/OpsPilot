@@ -8,6 +8,7 @@ const SCENARIOS = [
   { key: 'db_pool_exhaustion', name: 'Database pool exhaustion', desc: 'A deploy raises DB_POOL_SIZE and saturates Postgres connections.' },
   { key: 'kafka_lag', name: 'Kafka consumer lag', desc: 'The inventory consumer group keeps rebalancing and the backlog grows.' },
   { key: 'memory_leak', name: 'Checkout memory leak', desc: 'Checkout memory climbs until containers are OOMKilled.' },
+  { key: 'thread_pool_exhaustion', name: 'Thread pool exhaustion', desc: 'Near miss: looks like a DB pool problem, but Postgres is healthy.' },
 ] as const;
 
 const QUESTION = 'Why is the production system unhealthy?';
@@ -176,7 +177,8 @@ function Diagnosis({ result, approval, onApprove, approving }: {
   result: Investigation; approval: Approval | null; onApprove: () => void; approving: boolean;
 }) {
   const tone = result.root_cause_key === 'healthy' ? 'ok' : result.root_cause_key === 'unknown' ? 'warn' : 'crit';
-  const heading = { ok: 'No incident detected', warn: 'Needs human investigation', crit: 'Root cause identified' }[tone];
+  const heading = { ok: 'No incident detected', warn: 'Escalated: needs human investigation', crit: 'Root cause identified' }[tone];
+  const unexplained = result.unexplained_signals ?? [];
   return (
     <section className={`panel diagnosis tone-${tone}`}>
       <div className="diag-head">
@@ -192,6 +194,23 @@ function Diagnosis({ result, approval, onApprove, approving }: {
         </div>
         <div className="bar"><div style={{ width: pct(result.confidence) }} /></div>
       </div>
+
+      {tone === 'warn' && result.rationale.length > 0 && (
+        <div className="why">
+          <span className="label">Why it escalated</span>
+          <ul>{result.rationale.map((r) => <li key={r}>{r}</li>)}</ul>
+        </div>
+      )}
+
+      {unexplained.length > 0 && (
+        <div className="unexplained">
+          <span className="label">Not explained by this diagnosis</span>
+          <p>
+            {unexplained.map(ratioLabel).join(', ')} {unexplained.length === 1 ? 'is' : 'are'} anomalous but not accounted for.
+            Confidence was lowered; check for a second issue.
+          </p>
+        </div>
+      )}
 
       <div className="action">
         <span className="label">Recommended action</span>
@@ -222,17 +241,22 @@ function Hypotheses({ result }: { result: Investigation }) {
   return (
     <section className="panel">
       <h2 className="panel-title">Hypotheses considered</h2>
-      <p className="muted small hyp-note">Bars show how much of the collected evidence supports each candidate.</p>
+      <p className="muted small hyp-note">
+        A cause qualifies only when its required signal and at least one piece of cause-specific evidence are both present.
+      </p>
       <ol className="hyps">
         {result.hypotheses.map((h, i) => (
-          <li key={h.key} className={i === 0 && h.confidence > 0 ? 'top' : h.confidence === 0 ? 'ruled-out' : ''}>
+          <li key={h.key} className={i === 0 && h.qualified && result.requires_approval ? 'top' : !h.qualified ? 'ruled-out' : ''}>
             <div className="hyp-head">
               <span className="hyp-rank mono">{i + 1}</span>
               <span className="hyp-label">{h.label}</span>
+              {h.confidence > 0 && !h.qualified && <span className="pill pill-muted">Not qualified</span>}
             </div>
             <div className="bar thin"><div style={{ width: pct(h.confidence) }} /></div>
             {h.rationale.length > 0 ? (
-              <ul className="rationale">{h.rationale.map((r) => <li key={r}>{r}</li>)}</ul>
+              <ul className="rationale">
+                {h.rationale.map((r) => <li key={r} className={/^(Missing|No cause)/.test(r) ? 'missing' : ''}>{r}</li>)}
+              </ul>
             ) : (
               <p className="muted small rationale-none">No supporting evidence found.</p>
             )}

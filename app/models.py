@@ -13,6 +13,7 @@ class Hypothesis(BaseModel):
     label: str
     confidence: float = Field(ge=0, le=1)
     rationale: list[str] = []
+    qualified: bool = True
 
 class InvestigationRequest(BaseModel):
     question: str = Field(min_length=3)
@@ -29,6 +30,8 @@ class InvestigationResult(BaseModel):
     requires_approval: bool = True
     status: str = "proposed"
     reasoner: str = "rules"
+    unexplained_signals: list[str] = []
+    rationale: list[str] = []
 
 class ApprovalRequest(BaseModel):
     incident_id: str
