@@ -1,0 +1,6 @@
+RUNBOOKS = [
+ {"id":"rb-db-pool","title":"PostgreSQL connection pool exhaustion","tags":["postgres","database","connections","checkout","timeout"],"text":"Symptoms include saturated database connections, timeouts acquiring a connection, elevated API latency and errors. Check recent pool configuration changes. Safest first response is rollback or restore the prior pool configuration, then verify saturation and latency recover."},
+ {"id":"rb-kafka-lag","title":"Kafka consumer lag and rebalancing","tags":["kafka","consumer","lag","rebalance","inventory"],"text":"Large consumer lag with repeated group rebalances delays downstream processing. Inspect consumer health and partition assignment. Stabilize the group before scaling and verify the backlog drains."},
+ {"id":"rb-memory","title":"Container memory exhaustion","tags":["memory","oom","oomkill","container","leak"],"text":"Sustained memory growth near the container limit followed by OOMKill indicates memory exhaustion. Correlate with releases, capture a profile, and rollback a suspect release when appropriate."},
+ {"id":"rb-latency","title":"Generic API latency triage","tags":["latency","p95","api","errors"],"text":"For elevated API latency, correlate error rate with database, queue, CPU and memory signals before remediation. Prefer evidence-backed reversible actions."}
+]
