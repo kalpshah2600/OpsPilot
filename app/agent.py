@@ -13,7 +13,8 @@ log=logging.getLogger("opspilot.agent")
 def collect_evidence():
     m=STATE["metrics"]; ev=[]
     anomaly=DETECTOR.score(m)
-    ev.append(Evidence(source="ml_anomaly_detector",summary=f"IsolationForest anomaly={anomaly['is_anomaly']} score={anomaly['isolation_score']}; feature ratios={anomaly['feature_ratios']}",value=anomaly["isolation_score"],severity="warning" if anomaly["is_anomaly"] else "info"))
+    verdict="anomalous" if anomaly["is_anomaly"] else "within baseline"
+    ev.append(Evidence(source="ml_anomaly_detector",summary=f"IsolationForest: telemetry {verdict} (score {anomaly['isolation_score']})",value=anomaly["isolation_score"],severity="warning" if anomaly["is_anomaly"] else "info",details=anomaly))
     for k,v in m.items():
         sev="critical" if (("error_rate" in k and v>.05) or ("connection_pct" in k and v>90) or ("consumer_lag" in k and v>10000) or ("memory_pct" in k and v>90)) else "warning" if ("p95" in k and v>500) else "info"
         ev.append(Evidence(source="metrics",summary=k,value=v,severity=sev))

@@ -6,6 +6,7 @@ class Evidence(BaseModel):
     summary: str
     value: str | float | int | None = None
     severity: Literal["info", "warning", "critical"] = "info"
+    details: dict | None = None
 
 class Hypothesis(BaseModel):
     key: str
