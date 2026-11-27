@@ -1,4 +1,4 @@
-# OpsPilot V3 — Evidence-grounded incident investigation
+# OpsPilot V3: Evidence-grounded incident investigation
 
 OpsPilot is a portfolio-grade incident investigation system that collects telemetry evidence, runs an **IsolationForest** anomaly detector, retrieves operational runbooks, ranks root-cause hypotheses, traces the investigation, and keeps remediation behind explicit human approval.
 
@@ -105,6 +105,8 @@ React/TypeScript -> FastAPI -> evidence collector
 
 MCP stdio server -> metrics / logs / deployments / runbooks
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the investigation flow, reasoners and design decisions.
 
 ## Honest limitations
 - The included telemetry is synthetic; this is not connected to a real production environment.
